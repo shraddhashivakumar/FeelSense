@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model Performance Metrics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #f5f6fa;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+    #accuracyGauge {
+      width: 300px;
+      height: 300px;
+      margin: 0 auto;
+    }
+    .chart-container {
+      width: 90%;
+      max-width: 700px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    table {
+      width: 90%;
+      margin: 30px auto;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: center;
+      padding: 12px;
+    }
+    th {
+      background-color: #4a90e2;
+      color: white;
+    }
+    tr:nth-child(even) {
+      background: #f2f2f2;
+    }
+    .error {
+      color: red;
+      text-align: center;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Model Performance Metrics</h1>
+  <div id="summary"></div>
+
+  <div class="chart-container">
+    <canvas id="accuracyGauge"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="metricsChart"></canvas>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Label</th>
+        <th>Precision (%)</th>
+        <th>Recall (%)</th>
+        <th>F1-Score (%)</th>
+        <th>Support</th>
+      </tr>
+    </thead>
+    <tbody id="reportTable"></tbody>
+  </table>
+
+  <script>
+    const data = JSON.parse('{{ metrics_data | safe }}');
+
+    if (data.error) {
+      document.body.innerHTML = `<h2 class="error">${data.error}</h2>`;
+    } else {
+      const report = data.report;
+      const accuracy = report.accuracy ? (report.accuracy * 100).toFixed(2) : 0;
+
+      document.getElementById("summary").innerHTML = `
+        <h2 style="text-align:center;">Overall Accuracy: ${accuracy}%</h2>
+      `;
+
+      // Fill table
+      const tbody = document.getElementById("reportTable");
+      Object.entries(report).forEach(([label, stats]) => {
+        if (["accuracy", "macro avg", "weighted avg"].includes(label)) return;
+        tbody.innerHTML += `
+          <tr>
+            <td>${label}</td>
+            <td>${(stats.precision * 100).toFixed(2)}</td>
+            <td>${(stats.recall * 100).toFixed(2)}</td>
+            <td>${(stats["f1-score"] * 100).toFixed(2)}</td>
+            <td>${stats.support}</td>
+          </tr>
+        `;
+      });
+
+      // Extract metrics for chart
+      const labels = Object.keys(report).filter(l => !["accuracy", "macro avg", "weighted avg"].includes(l));
+      const precisions = labels.map(l => report[l].precision * 100);
+      const recalls = labels.map(l => report[l].recall * 100);
+      const f1s = labels.map(l => report[l]["f1-score"] * 100);
+
+      // Bar chart for Precision, Recall, F1
+      new Chart(document.getElementById("metricsChart"), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: "Precision", data: precisions, backgroundColor: "#3498db" },
+            { label: "Recall", data: recalls, backgroundColor: "#2ecc71" },
+            { label: "F1-Score", data: f1s, backgroundColor: "#f39c12" }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: { display: true, text: "Precision, Recall, and F1-Score by Label" },
+            legend: { position: "top" }
+          },
+          scales: { y: { beginAtZero: true, max: 100 } }
+        }
+      });
+
+      // Accuracy gauge chart
+      new Chart(document.getElementById("accuracyGauge"), {
+        type: 'doughnut',
+        data: {
+          labels: ['Accuracy', 'Remaining'],
+          datasets: [{
+            data: [accuracy, 100 - accuracy],
+            backgroundColor: ['#2ecc71', '#ecf0f1'],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          rotation: -90,
+          circumference: 180,
+          cutout: '75%',
+          plugins: {
+            title: { display: true, text: 'Accuracy Gauge' },
+            legend: { display: false },
+            tooltip: { enabled: false },
+            annotation: {
+              annotations: {
+                label: {
+                  type: 'label',
+                  position: 'center',
+                  content: `${accuracy}%`
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
